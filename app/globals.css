@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  .dark {
+    --color-bg: #13100d;
+    --color-surface: #1e1912;
+    --color-raised: #26201a;
+    --color-text: #f5ede4;
+    --color-muted: #a8927e;
+    --color-border: #3a2e24;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-sand dark:bg-[#13100d] text-ink dark:text-[#f5ede4] antialiased;
+}
+
+/* CUSTOM SCROLLBAR OVERLAYS */
+.os-theme-ember .os-scrollbar-thumb {
+  background: rgba(234, 112, 34, 0.6);
+  border-radius: 3px;
+}
+.os-theme-ember .os-scrollbar-thumb:hover {
+  background: rgba(234, 112, 34, 0.9);
+}
+.os-theme-ember .os-scrollbar { width: 6px; }
+.os-theme-ember .os-scrollbar-track { background: transparent; }
