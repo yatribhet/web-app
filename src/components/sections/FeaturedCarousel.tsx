@@ -3,7 +3,7 @@
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import { useCallback, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, MapPin, Star, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { PlaceDocument } from "../../types/place";
@@ -57,8 +57,8 @@ function FeaturedCard({ place }: { place: PlaceDocument }) {
         </div>
 
         {/* Title */}
-        <h3 className="font-display italic text-white text-xl md:text-2xl lg:text-3xl leading-tight mb-3 drop-shadow-md">
-          {place.name}
+        <h3 className="font-display italic text-white text-xl md:text-2xl lg:text-3xl leading-tight mb-3 drop-shadow-md line-clamp-2">
+          {place.popularName || place.name}
         </h3>
 
         {/* Rating + CTA row */}

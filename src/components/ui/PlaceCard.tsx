@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Heart, Mountain } from "lucide-react";
+import { Heart } from "lucide-react";
 import { PlaceDocument } from "../../types/place";
 import { useFavourites } from "../../hooks/useFavourites";
 import { FALLBACK_IMAGE } from "../../lib/constants";
@@ -47,7 +47,7 @@ export function PlaceCard({ place, variant }: PlaceCardProps) {
         </div>
         <div className="flex-1 p-2 flex flex-col justify-center">
           <h3 className="text-sm font-medium text-ink dark:text-[#f5ede4] line-clamp-1">
-            {place.name}
+            {place.popularName || place.name}
           </h3>
           <p className="text-xs text-stone mb-1">{place.district}</p>
           <div className="mt-auto flex">
@@ -124,8 +124,8 @@ export function PlaceCard({ place, variant }: PlaceCardProps) {
             <span className="text-stone">{place.district}</span>
           </div>
 
-          <h3 className="font-display text-lg text-ink dark:text-[#f5ede4] mb-1 line-clamp-1">
-            {place.name}
+          <h3 className="font-display text-lg text-ink dark:text-[#f5ede4] mb-1 line-clamp-2">
+            {place.popularName || place.name}
           </h3>
 
           <p className="font-body font-light text-stone text-xs line-clamp-2 mb-3">

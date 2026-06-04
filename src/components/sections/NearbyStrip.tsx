@@ -39,7 +39,7 @@ export function NearbyStrip({ currentPlace, allPlaces }: NearbyStripProps) {
           <div className="overflow-hidden" ref={emblaRef}>
             <div className="flex gap-4 min-w-min pl-0">
               {nearby.map((place) => (
-                <div key={place._id} className="w-44 flex-shrink-0">
+                <div key={place._id} className="w-56 flex-shrink-0">
                   <PlaceCard place={place} variant="compact" />
                 </div>
               ))}

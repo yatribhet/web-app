@@ -7,8 +7,8 @@ import { Navbar } from "@/src/components/layout/Navbar";
 import { Footer } from "@/src/components/layout/Footer";
 import { PageWrapper } from "@/src/components/layout/PageWrapper";
 
-export default function HomePage() {
-  const places = getAllPlaces();
+export default async function HomePage() {
+  const places = await getAllPlaces();
 
   // Pick top 5 based on rating to feature
   const featured = [...places].sort((a, b) => b.famousRating - a.famousRating).slice(0, 5);
@@ -21,7 +21,7 @@ export default function HomePage() {
         <FilterTabBar />
         <div className="bg-sand dark:bg-[#13100d] flex-1">
           <FeaturedCarousel places={featured} />
-          <CategoryGrid />
+          <CategoryGrid places={places} />
         </div>
       </PageWrapper>
       <Footer />

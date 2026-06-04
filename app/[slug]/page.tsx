@@ -18,11 +18,11 @@ export async function generateMetadata({
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
-  const place = getPlaceBySlug(params.slug);
+  const place = await getPlaceBySlug(params.slug);
   if (!place) return { title: "Place Not Found" };
 
   return {
-    title: place.seo.metaTitle ?? place.name,
+    title: place.seo.metaTitle ?? (place.popularName || place.name),
     description: place.seo.metaDescription ?? place.description.slice(0, 160),
     robots: place.seo.noIndex
       ? { index: false, follow: false }
@@ -31,7 +31,7 @@ export async function generateMetadata({
       canonical: place.seo.canonicalUrl ?? `https://yatribhet.com/${place.slug}`,
     },
     openGraph: {
-      title: place.seo.metaTitle ?? place.name,
+      title: place.seo.metaTitle ?? (place.popularName || place.name),
       description: place.seo.metaDescription ?? "",
       images: place.seo.ogImage
         ? [{ url: place.seo.ogImage, width: 1200, height: 630 }]
@@ -40,7 +40,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: place.seo.metaTitle ?? place.name,
+      title: place.seo.metaTitle ?? (place.popularName || place.name),
       description: place.seo.metaDescription ?? "",
       images: place.seo.ogImage ? [place.seo.ogImage] : [],
     },
@@ -48,17 +48,19 @@ export async function generateMetadata({
 }
 
 export async function generateStaticParams() {
-  const places = getAllPlaces();
+  const places = await getAllPlaces();
   return places.map((p) => ({ slug: p.slug }));
 }
 
-export default function PlaceDetailPage({
+export default async function PlaceDetailPage({
   params,
 }: {
   params: { slug: string };
 }) {
-  const place = getPlaceBySlug(params.slug);
-  const places = getAllPlaces();
+  const [place, places] = await Promise.all([
+    getPlaceBySlug(params.slug),
+    getAllPlaces(),
+  ]);
 
   if (!place) {
     notFound();
@@ -83,7 +85,7 @@ export default function PlaceDetailPage({
       {
         "@type": "ListItem",
         position: 3,
-        name: place.name,
+        name: place.popularName || place.name,
         item: `https://yatribhet.com/${place.slug}`,
       },
     ],
@@ -107,7 +109,7 @@ export default function PlaceDetailPage({
                 <span>›</span>
                 <a href={`/explore?state=${place.state}`} className="hover:text-ember transition-colors">{place.state}</a>
                 <span>›</span>
-                <span className="text-ink dark:text-[#f5ede4] font-medium">{place.name}</span>
+                <span className="text-ink dark:text-[#f5ede4] font-medium">{place.popularName || place.name}</span>
               </nav>
 
               {/* ═══ NEW HERO SECTION ══════════════════════════════ */}
@@ -121,16 +123,27 @@ export default function PlaceDetailPage({
                 
                 <SidebarActions place={place} variant="mobileDetails" />
 
-                <div className="mt-10 pt-8 border-t border-border-warm dark:border-[#3a2e24]">
-                  <h3 className="font-display text-xl mb-4 text-ink dark:text-[#f5ede4]">
-                    Available Amenities
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {place.structuredData.amenities.map((amenity) => (
-                      <AmenityChip key={amenity} amenity={amenity} />
-                    ))}
+                {place.structuredData.amenities.length > 0 ? (
+                  <div className="mt-10 pt-8 border-t border-border-warm dark:border-[#3a2e24]">
+                    <h3 className="font-display text-xl mb-4 text-ink dark:text-[#f5ede4]">
+                      Available Amenities
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {place.structuredData.amenities.map((amenity) => (
+                        <AmenityChip key={amenity} amenity={amenity} />
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-10 pt-8 border-t border-border-warm dark:border-[#3a2e24]">
+                    <h3 className="font-display text-xl mb-2 text-ink dark:text-[#f5ede4]">
+                      Available Amenities
+                    </h3>
+                    <p className="text-xs text-stone/60 italic">
+                      No amenities information available for this place yet.
+                    </p>
+                  </div>
+                )}
 
                 {place.aiMeta.keyFacts.length > 0 && (
                   <div className="mt-8 pt-8 border-t border-border-warm dark:border-[#3a2e24]">

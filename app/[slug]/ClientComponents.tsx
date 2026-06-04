@@ -18,7 +18,7 @@ export function TitleBlock({ place }: { place: PlaceDocument }) {
     >
       <div className="flex flex-col gap-2 relative">
         <h1 className="font-display text-3xl lg:text-4xl text-ink dark:text-[#f5ede4] flex items-center gap-2 flex-wrap">
-          {place.name}
+          {place.popularName || place.name}
           {place.lastVerifiedAt !== null && (
             <BadgeCheck 
               size={24} 

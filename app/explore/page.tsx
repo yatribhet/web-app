@@ -3,12 +3,12 @@ import { Navbar } from "@/src/components/layout/Navbar";
 import { PageWrapper } from "@/src/components/layout/PageWrapper";
 import ExploreClient from "./ExploreClient";
 
-export default function ExplorePage({
+export default async function ExplorePage({
   searchParams,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
 }) {
-  const places = getAllPlaces();
+  const places = await getAllPlaces();
   return (
     <>
       <Navbar />

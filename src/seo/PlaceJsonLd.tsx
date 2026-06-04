@@ -4,6 +4,10 @@ interface PlaceJsonLdProps {
   place: PlaceDocument;
 }
 
+function safeJsonLd(data: object): string {
+  return JSON.stringify(data).replace(/<\/script>/gi, '<\\/script>');
+}
+
 export function PlaceJsonLd({ place }: PlaceJsonLdProps) {
   const schemaA = {
     "@context": "https://schema.org",
@@ -70,13 +74,13 @@ export function PlaceJsonLd({ place }: PlaceJsonLdProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaA) }}
-      />
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(schemaA) }}
+      ></script>
       {schemaB && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaB) }}
-        />
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(schemaB) }}
+        ></script>
       )}
     </>
   );

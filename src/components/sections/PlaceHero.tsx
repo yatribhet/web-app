@@ -127,7 +127,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
     ? `Route: ${tracedRoute.name}`
     : focusPoint
     ? focusPoint.label
-    : place.name;
+    : (place.popularName || place.name);
 
   // Determine gallery layout
   const side1 = galleryImages[1];
@@ -146,7 +146,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
             <>
               <motion.img
                 src={hero}
-                alt={`${place.name} — hero`}
+                alt={`${place.popularName || place.name} — hero`}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
                 initial={{ opacity: 0, scale: 1.04 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -176,8 +176,8 @@ export function PlaceHero({ place }: PlaceHeroProps) {
                       <span className="text-xs font-mono tracking-widest">{place.altitude.toLocaleString()}m</span>
                     </div>
                   )}
-                  <h1 className="font-display italic text-white text-2xl md:text-4xl lg:text-5xl leading-tight drop-shadow-lg">
-                    {place.name}
+                  <h1 className="font-display italic text-white text-2xl md:text-4xl lg:text-5xl leading-tight drop-shadow-lg line-clamp-2">
+                    {place.popularName || place.name}
                   </h1>
                   <p className="text-white/60 text-xs tracking-widest uppercase">
                     {place.district} · {place.state}

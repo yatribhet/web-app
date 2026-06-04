@@ -49,7 +49,7 @@ export function SidebarActions({ place, variant = "desktop" }: SidebarActionsPro
 
   const handleShare = async () => {
     const url = window.location.href;
-    const title = place.seo.metaTitle || place.name;
+    const title = place.seo.metaTitle || place.popularName || place.name;
     if (navigator.share) {
       try { await navigator.share({ title, url }); }
       catch (err) { console.error("Share error", err); }

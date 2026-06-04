@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
-import { places } from "@/src/data/places";
+import { getAllPlaces } from "@/src/lib/places";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const places = await getAllPlaces();
   const placeRoutes = places.map((p) => ({
     url: `https://yatribhet.com/${p.slug}`,
     lastModified: p.lastVerifiedAt ? new Date(p.lastVerifiedAt) : new Date(),

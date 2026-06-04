@@ -47,11 +47,18 @@ export interface EntryFee {
   currency: string;
 }
 
+export interface StarBreakdown {
+  star: number;
+  count: number;
+  percentage: number;
+}
+
 export interface AggregateRating {
   ratingValue: number;
   reviewCount: number;
   bestRating: number;
   worstRating: number;
+  breakdown: StarBreakdown[];
 }
 
 export interface StructuredData {
