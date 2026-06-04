@@ -187,7 +187,7 @@ export function SidebarActions({ place, variant = "desktop" }: SidebarActionsPro
   // Desktop — sticky sidebar
   return (
     <>
-      <div className="sticky top-24 space-y-4 hidden lg:block">
+      <div className="sticky top-24 space-y-4 hidden lg:block w-full min-w-0 overflow-hidden">
         <ActionBox />
         <MapAndRouteCard />
         <OtherDetails />
