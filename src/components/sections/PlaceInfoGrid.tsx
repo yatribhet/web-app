@@ -30,7 +30,7 @@ export function PlaceInfoGrid({ place }: PlaceInfoGridProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-8">
       {fields.map((field, idx) => (
         <div
           key={idx}

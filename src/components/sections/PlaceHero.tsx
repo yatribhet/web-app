@@ -62,7 +62,7 @@ function Lightbox({
         <ChevronLeft size={32} />
       </button>
 
-      <div className="relative max-w-5xl max-h-[85vh] w-full px-16" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-w-5xl max-h-[85vh] w-full px-10 sm:px-16" onClick={(e) => e.stopPropagation()}>
         <AnimatePresence mode="wait">
           <motion.img
             key={current}
@@ -141,7 +141,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
       ══════════════════════════════════════════════════════════════ */}
       <section ref={heroRef} className="w-full relative">
         {/* Main hero image */}
-        <div className="relative w-full rounded-2xl overflow-hidden shadow-xl bg-[#13100d] group h-[56vw] max-h-[520px] min-h-[250px]">
+        <div className="relative w-full rounded-2xl overflow-hidden shadow-xl bg-[#13100d] group aspect-video max-h-[500px] min-h-[200px]">
           {hero ? (
             <>
               <motion.img
@@ -205,19 +205,13 @@ export function PlaceHero({ place }: PlaceHeroProps) {
 
         {/* ─── Photo gallery strip below hero ────────────────────── */}
         {galleryImages.length > 1 && (
-          <div className="mt-3 grid gap-3"
-            style={{
-              gridTemplateColumns: side2
-                ? "1fr 1fr 1fr"
-                : side1
-                ? "1fr 1fr"
-                : "1fr",
-            }}
-          >
+          <div className={`mt-3 grid gap-2 md:gap-3 ${
+            side2 ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"
+          }`}>
             {side1 && (
               <button
                 onClick={() => openLightbox(1)}
-                className="relative rounded-xl overflow-hidden bg-[#13100d] group h-28 md:h-36 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+                className="relative rounded-xl overflow-hidden bg-[#13100d] group h-20 sm:h-28 md:h-36 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
               >
                 <img
                   src={side1}
@@ -242,7 +236,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
             {side2 && (
               <button
                 onClick={() => openLightbox(2)}
-                className="relative rounded-xl overflow-hidden bg-[#13100d] group h-28 md:h-36 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+                className="relative rounded-xl overflow-hidden bg-[#13100d] group h-20 sm:h-28 md:h-36 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
               >
                 <img
                   src={side2}
@@ -268,7 +262,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
             {galleryImages.length > 1 && (
               <button
                 onClick={() => openLightbox(0)}
-                className="relative rounded-xl overflow-hidden bg-[#1a140e] group h-28 md:h-36 border border-border-warm dark:border-[#3a2e24] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember hover:border-ember/40 transition-colors"
+                className="relative rounded-xl overflow-hidden bg-[#1a140e] group h-20 sm:h-28 md:h-36 border border-border-warm dark:border-[#3a2e24] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember hover:border-ember/40 transition-colors"
               >
                 {galleryImages[3] && (
                   <img
@@ -314,7 +308,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
         </div>
 
         {/* ─── Interactive Map & Route Explorer ────────────────── */}
-        <div className="mt-3">
+        <div className="mt-3 overflow-hidden">
           {/* ── Accordion toggle ──────────────────────────────── */}
           <button
             onClick={() => {

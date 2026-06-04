@@ -232,10 +232,15 @@ export default function ExploreClient({
 
       <button
         onClick={() => setIsMobileFiltersOpen(true)}
-        className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-ember text-white rounded-full flex items-center justify-center shadow-lg z-40 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ember/40 hover:bg-dusk transition-colors"
+        className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-ember text-white rounded-full flex items-center justify-center shadow-lg z-40 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ember/40 hover:bg-dusk transition-colors relative"
         aria-label="Filter options"
       >
         <SlidersHorizontal size={24} />
+        {(types.length > 0 || districts.length > 0 || search) && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 bg-ink dark:bg-[#f5ede4] text-white dark:text-ink text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow">
+            {types.length + districts.length + (search ? 1 : 0)}
+          </span>
+        )}
       </button>
     </div>
   );

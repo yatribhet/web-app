@@ -102,14 +102,14 @@ export default async function PlaceDetailPage({
       <PageWrapper>
         <div className="bg-sand dark:bg-[#13100d] flex-1">
           <div className="max-w-6xl mx-auto px-4 pt-5 pb-10 items-start grid lg:grid-cols-[1fr_340px] gap-8">
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0 overflow-hidden">
               {/* Breadcrumb */}
-              <nav className="text-xs text-stone mb-3 flex items-center gap-1.5 uppercase tracking-wider">
-                <a href="/" className="hover:text-ember transition-colors">Nepal</a>
-                <span>›</span>
-                <a href={`/explore?state=${place.state}`} className="hover:text-ember transition-colors">{place.state}</a>
-                <span>›</span>
-                <span className="text-ink dark:text-[#f5ede4] font-medium">{place.popularName || place.name}</span>
+              <nav className="text-xs text-stone mb-3 flex flex-wrap items-center gap-1.5 uppercase tracking-wider min-w-0">
+                <a href="/" className="hover:text-ember transition-colors shrink-0">Nepal</a>
+                <span className="shrink-0">›</span>
+                <a href={`/explore?state=${place.state}`} className="hover:text-ember transition-colors shrink-0">{place.state}</a>
+                <span className="shrink-0">›</span>
+                <span className="text-ink dark:text-[#f5ede4] font-medium truncate min-w-0">{place.popularName || place.name}</span>
               </nav>
 
               {/* ═══ NEW HERO SECTION ══════════════════════════════ */}

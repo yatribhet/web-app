@@ -21,6 +21,12 @@ body {
   @apply bg-sand dark:bg-[#13100d] text-ink dark:text-[#f5ede4] antialiased;
 }
 
+/* Hide scrollbar while keeping scroll functionality */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
 /* CUSTOM SCROLLBAR OVERLAYS */
 .os-theme-ember .os-scrollbar-thumb {
   background: rgba(234, 112, 34, 0.6);
