@@ -111,6 +111,39 @@ export interface AIMeta {
   topicAssociations: string[];
 }
 
+export type HospitalityType =
+  | "hotel"
+  | "restaurant"
+  | "cafe"
+  | "resort"
+  | "lodge"
+  | "guesthouse"
+  | "homestay";
+
+export type PriceRange = "budget" | "mid-range" | "luxury";
+
+export interface HospitalityChainRef {
+  _id: string | null;
+  name: string | null;
+  logo: string | null;
+}
+
+export interface Hospitality {
+  _id: string;
+  placeId: string;
+  name: string;
+  address: string;
+  rating: number;
+  hospitalityType: HospitalityType;
+  displayImage: string | null;
+  priceRange: PriceRange | null;
+  phone: string | null;
+  website: string | null;
+  isInContact: boolean;
+  location?: GeoLocation;
+  chain?: HospitalityChainRef;
+}
+
 export interface PlaceDocument {
   _id: string;
   country: string;
@@ -138,4 +171,5 @@ export interface PlaceDocument {
   lastVerifiedAt: string | null; // ISO date string
   altitude?: number; // meters
   difficulty?: "Easy" | "Moderate" | "Hard" | "Expert" | "Godmode";
+  hospitality?: Hospitality[]; // first batch embedded by the SEO API for SSR
 }

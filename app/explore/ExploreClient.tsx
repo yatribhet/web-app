@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, ChevronUp } from "lucide-react";
 import { PlaceCard } from "@/src/components/ui/PlaceCard";
 import { PlaceDocument } from "@/src/types/place";
 
@@ -15,7 +15,6 @@ function colsFromWidth(px: number): number {
   return 1;
 }
 
-// PlaceCard large = h-56 image + ~168px body + 20px gap row spacing
 const ESTIMATED_ROW_HEIGHT = 440;
 
 export default function ExploreClient({
@@ -26,6 +25,7 @@ export default function ExploreClient({
   searchParams: any;
 }) {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [search, setSearch] = useState(
     typeof searchParams?.q === "string" ? searchParams.q : ""
   );
@@ -84,12 +84,18 @@ export default function ExploreClient({
     setSort("Rating");
   };
 
-  // ── Virtualization ────────────────────────────────────────────────────────
-  // scrollRef  → the scrollable viewport (inner content div)
-  // gridRef    → measured to determine column count via ResizeObserver
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const gridRef   = useRef<HTMLDivElement>(null);
-  const [colCount, setColCount] = useState(2); // safe SSR default
+  // ── Scroll-to-top visibility ──────────────────────────────────────────────
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // ── Virtualization (window scroll) ────────────────────────────────────────
+  // gridRef → measured for column count + scrollMargin offset
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [colCount, setColCount] = useState(2);
+  const [scrollMargin, setScrollMargin] = useState(0);
 
   useEffect(() => {
     const el = gridRef.current;
@@ -98,8 +104,8 @@ export default function ExploreClient({
       setColCount(colsFromWidth(entry.contentRect.width));
     });
     ro.observe(el);
-    // Measure immediately after mount
     setColCount(colsFromWidth(el.offsetWidth));
+    setScrollMargin(el.offsetTop);
     return () => ro.disconnect();
   }, []);
 
@@ -112,16 +118,16 @@ export default function ExploreClient({
     return out;
   }, [filtered, colCount]);
 
-  const virtualizer = useVirtualizer({
+  const virtualizer = useWindowVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollRef.current,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
-    overscan: 3, // render 3 rows above + below visible area
+    overscan: 3,
+    scrollMargin,
   });
 
   // ── Sidebar content (shared by desktop aside + mobile drawer) ─────────────
   const SidebarContent = () => (
-    <div className="flex flex-col gap-6 p-6 overflow-y-auto max-h-full">
+    <div className="flex flex-col gap-6 p-6">
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-2.5 text-stone w-4 h-4" />
@@ -142,7 +148,7 @@ export default function ExploreClient({
             <button
               key={t}
               onClick={() => toggleType(t)}
-              className={`px-3 py-1.5 rounded text-xs border ${
+              className={`px-3 py-1.5 rounded text-xs border transition-colors ${
                 types.includes(t)
                   ? "bg-terracotta dark:bg-[#26201a] border-[#f5c89a] text-[#8b4a1a] dark:text-[#d4936a]"
                   : "border-border-warm dark:border-[#3a2e24] hover:border-ember text-stone"
@@ -162,7 +168,7 @@ export default function ExploreClient({
             <button
               key={d}
               onClick={() => toggleDistrict(d)}
-              className={`px-3 py-1.5 rounded text-xs border ${
+              className={`px-3 py-1.5 rounded text-xs border transition-colors ${
                 districts.includes(d)
                   ? "bg-terracotta dark:bg-[#26201a] border-[#f5c89a] text-[#8b4a1a] dark:text-[#d4936a]"
                   : "border-border-warm dark:border-[#3a2e24] hover:border-ember text-stone"
@@ -182,7 +188,7 @@ export default function ExploreClient({
             <button
               key={opt}
               onClick={() => setSort(opt)}
-              className={`flex-1 py-2 ${
+              className={`flex-1 py-2 transition-colors ${
                 sort === opt
                   ? "bg-ember text-white"
                   : "bg-white dark:bg-[#1e1912] hover:bg-stone/5"
@@ -218,92 +224,80 @@ export default function ExploreClient({
   );
 
   return (
-    <div className="max-w-[1440px] mx-auto w-full relative">
-      {/* ── Desktop sidebar (fixed) ────────────────────────────────────────── */}
-      <aside className="hidden lg:block w-64 fixed left-auto top-14 h-[calc(100vh-56px)] border-r border-border-warm dark:border-[#3a2e24] overflow-y-auto bg-sand dark:bg-[#13100d]">
+    <div className="max-w-[1440px] mx-auto w-full flex items-start">
+      {/* ── Desktop sidebar (sticky) ───────────────────────────────────────── */}
+      <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] border-r border-border-warm dark:border-[#3a2e24] bg-sand dark:bg-[#13100d] overflow-y-auto">
         <SidebarContent />
       </aside>
 
-      {/* ── Main scrollable area ───────────────────────────────────────────── */}
-      {/*
-        Height = viewport minus the 56px fixed navbar.
-        overflow-y-auto makes this the scroll container that TanStack Virtual
-        reads — only the rows inside the visible window are mounted in the DOM.
-      */}
-      <div
-        ref={scrollRef}
-        className="lg:ml-64 overflow-y-auto"
-        style={{ height: "calc(100vh - 3.5rem)" }}
-      >
-        <div className="p-4 sm:p-6 lg:p-8">
-          {/* Heading + result count */}
-          <h1 className="font-display text-2xl lg:text-3xl mb-6">
-            Exploring Nepal
-            <span className="text-stone font-body text-base font-normal ml-3">
-              {filtered.length}{" "}
-              {filtered.length === 1 ? "result" : "results"}
-            </span>
-          </h1>
+      {/* ── Main content area (scrolls with the page) ─────────────────────── */}
+      <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
+        {/* Heading + result count */}
+        <h1 className="font-display text-2xl lg:text-3xl mb-6">
+          Exploring Nepal
+          <span className="text-stone font-body text-base font-normal ml-3">
+            {filtered.length}{" "}
+            {filtered.length === 1 ? "result" : "results"}
+          </span>
+        </h1>
 
-          {/* ── Empty state ──────────────────────────────────────────────── */}
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <Search className="w-16 h-16 text-ember/40 stroke-[1.5] mb-4" />
-              <h2 className="font-display text-xl mb-2">No places found</h2>
-              <p className="text-stone text-sm mb-4">
-                Try adjusting your filters or search term.
-              </p>
-              <button
-                onClick={clearFilters}
-                className="bg-ember text-white px-6 py-2 rounded text-sm hover:bg-dusk transition-colors focus-visible:outline-none"
-              >
-                Clear filters
-              </button>
-            </div>
-          ) : (
-            /* ── Virtualised grid ──────────────────────────────────────── */
-            <div ref={gridRef}>
-              {/*
-                Outer div has the TOTAL height of all (virtual) rows so the
-                scrollbar thumb accurately reflects how much content exists.
-                Inner items are absolutely positioned and translated into view.
-              */}
-              <div
-                style={{
-                  height: virtualizer.getTotalSize(),
-                  width: "100%",
-                  position: "relative",
-                }}
-              >
-                {virtualizer.getVirtualItems().map((vRow) => (
-                  <div
-                    key={vRow.key}
-                    data-index={vRow.index}
-                    ref={virtualizer.measureElement}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      transform: `translateY(${vRow.start}px)`,
-                    }}
-                  >
-                    {/* Each virtual row is a full-width CSS grid slice */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-5">
-                      {rows[vRow.index].map((place) => (
-                        <PlaceCard
-                          key={place._id}
-                          place={place}
-                          variant="large"
-                        />
-                      ))}
-                    </div>
+        {/* ── Empty state ────────────────────────────────────────────────── */}
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Search className="w-16 h-16 text-ember/40 stroke-[1.5] mb-4" />
+            <h2 className="font-display text-xl mb-2">No places found</h2>
+            <p className="text-stone text-sm mb-4">
+              Try adjusting your filters or search term.
+            </p>
+            <button
+              onClick={clearFilters}
+              className="bg-ember text-white px-6 py-2 rounded text-sm hover:bg-dusk transition-colors focus-visible:outline-none"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          /* ── Virtualised grid (uses window scroll) ───────────────────── */
+          <div ref={gridRef}>
+            {/*
+              Total height reserves space for all virtual rows so the browser
+              scrollbar accurately reflects how much content exists.
+              Items are absolutely positioned and translated into view.
+            */}
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((vRow) => (
+                <div
+                  key={vRow.key}
+                  data-index={vRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${vRow.start - virtualizer.options.scrollMargin}px)`,
+                  }}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-5">
+                    {rows[vRow.index].map((place) => (
+                      <PlaceCard
+                        key={place._id}
+                        place={place}
+                        variant="large"
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── Mobile filter drawer ───────────────────────────────────────────── */}
@@ -347,6 +341,23 @@ export default function ExploreClient({
           </span>
         )}
       </button>
+
+      {/* ── Scroll-to-top button ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-24 right-6 lg:bottom-8 lg:right-8 w-10 h-10 bg-white dark:bg-[#1e1912] border border-border-warm dark:border-[#3a2e24] text-stone hover:text-ember rounded-full flex items-center justify-center shadow-md z-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/40"
+            aria-label="Scroll to top"
+          >
+            <ChevronUp size={18} />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -10,11 +10,23 @@ export interface RouteMapPoint {
   label: string;
 }
 
+export interface HospitalityMapPoint {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  type: string; // hospitalityType — drives icon glyph + colour
+}
+
 interface RouteMapProps {
   center: [number, number]; // [lat, lng] — the place's own coordinates
   focusPoint?: RouteMapPoint | null;
   traceRoute?: Route | null;
   canvasClassName?: string; // override the inner map canvas classes
+  wrapperClassName?: string; // extra classes on the outermost wrapper div
+  hospitalityPoints?: HospitalityMapPoint[]; // "where to stay" markers
+  activeHospitalityId?: string | null; // highlighted + panned-to marker
+  onHospitalityClick?: (id: string) => void; // pin → select the card
 }
 
 /** Returns true only when every value is a valid, finite number */
@@ -39,12 +51,23 @@ const PULSE_CSS = `
 }
 `;
 
-export function RouteMap({ center, focusPoint, traceRoute, canvasClassName }: RouteMapProps) {
+export function RouteMap({
+  center,
+  focusPoint,
+  traceRoute,
+  canvasClassName,
+  wrapperClassName,
+  hospitalityPoints,
+  activeHospitalityId,
+  onHospitalityClick,
+}: RouteMapProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const LRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const polyRef = useRef<any>(null);
+  const hospitalityLayerRef = useRef<Map<string, any>>(new Map());
+  const prevActiveHospId = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [warn, setWarn] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(false);
@@ -120,6 +143,7 @@ export function RouteMap({ center, focusPoint, traceRoute, canvasClassName }: Ro
       LRef.current = null;
       overlaysRef.current = [];
       polyRef.current = null;
+      hospitalityLayerRef.current.clear();
       setReady(false);
       setScrollEnabled(false);
     };
@@ -173,6 +197,26 @@ export function RouteMap({ center, focusPoint, traceRoute, canvasClassName }: Ro
       iconSize: [24, 32],
       iconAnchor: [12, 32],
     });
+
+  // ── Hospitality marker (distinct circular badge, not a route teardrop) ─
+  const FOOD_TYPES = new Set(["restaurant", "cafe"]);
+  const BED_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>`;
+  const FORK_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Z"/></svg>`;
+
+  const hospitalityIcon = (L: any, type: string, active: boolean) => {
+    const isFood = FOOD_TYPES.has(type);
+    const color = isFood ? "#4a7c59" : "#2d6ea8";
+    const size = active ? 30 : 24;
+    const ring = active ? `box-shadow:0 0 0 4px ${color}40,0 3px 10px rgba(0,0,0,.35);` : "box-shadow:0 2px 8px rgba(0,0,0,.3);";
+    return L.divIcon({
+      className: "hospitality-marker",
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2.5px solid white;${ring}display:flex;align-items:center;justify-content:center;transition:all .2s ease">${
+        isFood ? FORK_SVG : BED_SVG
+      }</div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+  };
 
   // ── Fly to a point (no-op if coordinates are bad) ─────────────────────
   const safeFly = (map: any, lat: unknown, lng: unknown, z: number) => {
@@ -327,6 +371,41 @@ export function RouteMap({ center, focusPoint, traceRoute, canvasClassName }: Ro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceRoute, ready]);
 
+  // ── Effect: hospitality markers (independent layer) ───────────────────
+  // Kept separate from clear()/overlaysRef so itinerary clicks (focus/trace)
+  // never tear these down. Rebuilds only when the point set or active id
+  // changes — not on every focus update.
+  useEffect(() => {
+    const map = mapRef.current;
+    const L = LRef.current;
+    if (!ready || !map || !L) return;
+
+    const layer = hospitalityLayerRef.current;
+    // Remove existing markers
+    layer.forEach((m) => { try { m.remove(); } catch (_) {} });
+    layer.clear();
+
+    (hospitalityPoints ?? []).forEach((pt) => {
+      if (!fin(pt.lat, pt.lng)) return;
+      const active = pt.id === activeHospitalityId;
+      const marker = L.marker([pt.lat, pt.lng], {
+        icon: hospitalityIcon(L, pt.type, active),
+        zIndexOffset: active ? 1000 : 0,
+        title: pt.label,
+      }).addTo(map);
+      if (onHospitalityClick) marker.on("click", () => onHospitalityClick(pt.id));
+      layer.set(pt.id, marker);
+    });
+
+    // Pan to the active marker only when it actually changes (gentle, no zoom)
+    if (activeHospitalityId && activeHospitalityId !== prevActiveHospId.current) {
+      const pt = (hospitalityPoints ?? []).find((p) => p.id === activeHospitalityId);
+      if (pt && fin(pt.lat, pt.lng)) map.panTo([pt.lat, pt.lng], { animate: true, duration: 0.6 });
+    }
+    prevActiveHospId.current = activeHospitalityId ?? null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hospitalityPoints, activeHospitalityId, ready]);
+
   // ── Custom zoom handlers ───────────────────────────────────────────────
   const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), []);
   const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), []);
@@ -339,7 +418,7 @@ export function RouteMap({ center, focusPoint, traceRoute, canvasClassName }: Ro
       {/* Inject pulse keyframe once */}
       <style dangerouslySetInnerHTML={{ __html: PULSE_CSS }} />
 
-      <div className="relative group/map">
+      <div className={`relative group/map${wrapperClassName ? ` ${wrapperClassName}` : ""}`}>
         {/* ── Map canvas ─────────────────────────────────────────── */}
         <div
           ref={divRef}

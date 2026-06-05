@@ -2,25 +2,9 @@
 
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ZoomIn, ChevronLeft, ChevronRight, Play, Map, Mountain, ChevronsDown, ExternalLink } from "lucide-react";
-import dynamic from "next/dynamic";
-import { PlaceDocument, Route } from "../../types/place";
+import { X, ZoomIn, ChevronLeft, ChevronRight, Play, Mountain } from "lucide-react";
+import { PlaceDocument } from "../../types/place";
 import { FALLBACK_IMAGE } from "../../lib/constants";
-import { RouteTimeline } from "../ui/RouteTimeline";
-import type { RouteMapPoint } from "../ui/RouteMap";
-
-const RouteMap = dynamic(
-  () => import("../ui/RouteMap").then((m) => ({ default: m.RouteMap })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-64 md:h-80 rounded-b-xl bg-sand dark:bg-[#13100d] flex flex-col items-center justify-center gap-3">
-        <div className="w-8 h-8 rounded-full border-2 border-ember/30 border-t-ember animate-spin" />
-        <span className="text-stone/40 text-[10px] uppercase tracking-widest">Loading map…</span>
-      </div>
-    ),
-  }
-);
 
 interface PlaceHeroProps {
   place: PlaceDocument;
@@ -104,9 +88,6 @@ function Lightbox({
 export function PlaceHero({ place }: PlaceHeroProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [mapExpanded, setMapExpanded] = useState(false);
-  const [focusPoint, setFocusPoint] = useState<RouteMapPoint | null>(null);
-  const [tracedRoute, setTracedRoute] = useState<Route | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
   const openLightbox = useCallback((idx: number) => {
@@ -116,18 +97,6 @@ export function PlaceHero({ place }: PlaceHeroProps) {
 
   const hero = place.displayImage || place.images?.[0];
   const galleryImages = place.images ?? [];
-  const hasRoutes = place.routes && place.routes.length > 0;
-
-  const mapCenter: [number, number] = [
-    place.location.coordinates[1],
-    place.location.coordinates[0],
-  ];
-
-  const mapLabel = tracedRoute
-    ? `Route: ${tracedRoute.name}`
-    : focusPoint
-    ? focusPoint.label
-    : (place.popularName || place.name);
 
   // Determine gallery layout
   const side1 = galleryImages[1];
@@ -307,124 +276,6 @@ export function PlaceHero({ place }: PlaceHeroProps) {
           </div>
         </div>
 
-        {/* ─── Interactive Map & Route Explorer ────────────────── */}
-        <div className="mt-3 overflow-hidden">
-          {/* ── Accordion toggle ──────────────────────────────── */}
-          <button
-            onClick={() => {
-              setMapExpanded((v) => !v);
-              if (mapExpanded) {
-                setFocusPoint(null);
-                setTracedRoute(null);
-              }
-            }}
-            className="group w-full flex items-center justify-between px-5 py-3.5 rounded-xl bg-white dark:bg-[#1e1912] border border-border-warm dark:border-[#3a2e24] hover:border-ember/40 transition-all shadow-sm"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <Map size={18} className="text-ember shrink-0" />
-              <div className="flex flex-col items-start min-w-0">
-                <span className="text-sm font-medium text-ink dark:text-[#f5ede4] leading-tight">
-                  {mapExpanded ? "Hide map" : "Explore map & routes"}
-                </span>
-                {mapExpanded && (tracedRoute || focusPoint) && (
-                  <motion.span
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-[10px] text-ember truncate max-w-[180px] leading-tight mt-0.5"
-                  >
-                    {mapLabel}
-                  </motion.span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <a
-                href={`https://maps.google.com/?q=${place.location.coordinates[1]},${place.location.coordinates[0]}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs text-ember hover:text-dusk flex items-center gap-1 transition-colors"
-              >
-                Open in Maps <ExternalLink size={12} />
-              </a>
-              <motion.div
-                animate={{ rotate: mapExpanded ? 180 : 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ChevronsDown size={16} className="text-stone" />
-              </motion.div>
-            </div>
-          </button>
-
-          {/* ── Accordion panel ───────────────────────────────── */}
-          <AnimatePresence>
-            {mapExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-                className="overflow-hidden"
-              >
-                <div className="mt-2 rounded-xl border border-border-warm dark:border-[#3a2e24] shadow-md overflow-hidden bg-white dark:bg-[#1e1912]">
-
-                  {/* Map header bar */}
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-warm/60 dark:border-[#3a2e24]/60">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-ember shrink-0" />
-                      <span className="text-xs font-semibold text-ink dark:text-[#f5ede4] truncate">
-                        {mapLabel}
-                      </span>
-                    </div>
-                    {(focusPoint || tracedRoute) && (
-                      <button
-                        onClick={() => { setFocusPoint(null); setTracedRoute(null); }}
-                        className="flex items-center gap-1 text-[10px] text-stone/60 hover:text-ember transition-colors shrink-0 ml-2"
-                      >
-                        <X size={11} /> Reset
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Interactive Leaflet map */}
-                  <RouteMap
-                    center={mapCenter}
-                    focusPoint={focusPoint}
-                    traceRoute={tracedRoute}
-                    canvasClassName="w-full h-64 md:h-80 overflow-hidden bg-sand dark:bg-[#13100d]"
-                  />
-
-                  {/* Route timeline (only when routes exist) */}
-                  {hasRoutes && (
-                    <div className="border-t border-border-warm/60 dark:border-[#3a2e24]/60 px-4 pt-4 pb-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-display text-sm text-ink dark:text-[#f5ede4]">
-                          {place.routes.length > 1 ? "Travel Routes" : "Route Itinerary"}
-                        </h4>
-                        <span className="text-[10px] text-stone/50 uppercase tracking-wider">
-                          {place.routes.length} {place.routes.length === 1 ? "route" : "routes"}
-                        </span>
-                      </div>
-                      <RouteTimeline
-                        routes={place.routes}
-                        onFocusPoint={(pt) => {
-                          setTracedRoute(null);
-                          setFocusPoint(pt);
-                        }}
-                        onTraceRoute={(rt) => {
-                          setFocusPoint(null);
-                          setTracedRoute(rt);
-                        }}
-                        activeTracedRoute={tracedRoute}
-                        activeFocusPoint={focusPoint}
-                      />
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </section>
 
       {/* ─── Lightbox Portal ──────────────────────────────────────── */}

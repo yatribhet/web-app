@@ -19,7 +19,7 @@ export function RouteTimeline({
   onFocusPoint,
   onTraceRoute,
   activeTracedRoute,
-  activeFocusPoint,
+  activeFocusPoint: _activeFocusPoint,
 }: RouteTimelineProps) {
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [activeStepCode, setActiveStepCode] = useState<string | null>(null);
@@ -198,14 +198,25 @@ export function RouteTimeline({
             {/* End marker */}
             <div className="relative pt-1">
               <div className="absolute -left-[17px] md:-left-[19px] top-2 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#1e1912] bg-sage shadow-sm" />
-              <div className="flex items-center gap-2 px-3">
-                <h5 className="text-[13px] font-semibold text-sage">
-                  {steps[steps.length - 1].ending}
-                </h5>
-                <span className="bg-sage/15 text-sage text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full">
-                  Destination
-                </span>
-              </div>
+              {(() => {
+                const raw = steps[steps.length - 1].ending;
+                const parts = raw.split(",").map((s) => s.trim());
+                const primary = parts[0];
+                const secondary = parts.slice(1).join(", ");
+                return (
+                  <div className="px-3 flex flex-col gap-0.5" title={raw}>
+                    <span className="self-start bg-sage/15 text-sage text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full">
+                      Destination
+                    </span>
+                    <h5 className="text-[13px] font-semibold text-sage truncate">
+                      {primary}
+                    </h5>
+                    {secondary && (
+                      <p className="text-[10px] text-stone/55 truncate">{secondary}</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </motion.div>
