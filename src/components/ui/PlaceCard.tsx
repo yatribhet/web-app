@@ -9,7 +9,7 @@ import { FALLBACK_IMAGE } from "../../lib/constants";
 
 interface PlaceCardProps {
   place: PlaceDocument;
-  variant: "large" | "compact";
+  variant: "large" | "compact" | "strip";
 }
 
 export function PlaceCard({ place, variant }: PlaceCardProps) {
@@ -57,6 +57,60 @@ export function PlaceCard({ place, variant }: PlaceCardProps) {
               </span>
             ) : null}
           </div>
+        </div>
+      </Link>
+    );
+  }
+
+  // Strip variant — vertical card for NearbyStrip carousel
+  if (variant === "strip") {
+    return (
+      <Link
+        href={`/${place.slug}`}
+        className="group block rounded-md overflow-hidden border border-border-warm dark:border-[#3a2e24] bg-white dark:bg-[#1e1912] transition-all duration-200 hover:shadow-md hover:border-ember/40 dark:hover:border-ember/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
+      >
+        {/* Image */}
+        <div className="h-28 relative bg-[#13100d] overflow-hidden">
+          {place.displayImage && (
+            <img
+              src={place.displayImage}
+              alt={place.name}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                if (img.src !== FALLBACK_IMAGE) img.src = FALLBACK_IMAGE;
+              }}
+            />
+          )}
+          <div className={`${place.displayImage ? "hidden" : ""} absolute inset-0 bg-[#13100d]`}>
+            <img src={FALLBACK_IMAGE} alt="Yatribhet Placeholder" className="w-full h-full object-cover opacity-40" />
+          </div>
+
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+
+          <span className="absolute top-1.5 left-1.5 bg-ember text-white text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded">
+            {place.placeType}
+          </span>
+
+          <span className="absolute bottom-1.5 right-1.5 bg-black/50 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
+            ★ {place.famousRating}
+          </span>
+        </div>
+
+        {/* Body */}
+        <div className="p-2.5">
+          <h4
+            title={place.popularName || place.name}
+            className="text-[13px] font-medium text-ink dark:text-[#f5ede4] truncate mb-1"
+          >
+            {place.popularName || place.name}
+          </h4>
+          <p className="text-[10px] text-stone">{place.district}</p>
+          {place.routes?.[0]?.estimatedDistance ? (
+            <span className="mt-2 inline-block text-[10px] bg-terracotta dark:bg-[#26201a] text-[#8b4a1a] dark:text-[#d4936a] rounded px-1.5 py-0.5">
+              {place.routes[0].estimatedDistance}km away
+            </span>
+          ) : null}
         </div>
       </Link>
     );

@@ -19,7 +19,7 @@ export function RouteTimeline({
   onFocusPoint,
   onTraceRoute,
   activeTracedRoute,
-  activeFocusPoint,
+  activeFocusPoint: _activeFocusPoint,
 }: RouteTimelineProps) {
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [activeStepCode, setActiveStepCode] = useState<string | null>(null);
@@ -37,30 +37,26 @@ export function RouteTimeline({
   };
 
   const handleStepClick = (step: SubRoute) => {
-    const lat = step.startLocation.coordinates[1];
-    const lng = step.startLocation.coordinates[0];
-    const point: RouteMapPoint = { lat, lng, label: step.name };
-
-    if (activeStepCode === step.myCode) {
-      // Toggle off
-      setActiveStepCode(null);
-      onFocusPoint?.(null);
-    } else {
-      // Cancel trace if active
-      if (isTracing) onTraceRoute?.(null);
-      setActiveStepCode(step.myCode);
-      onFocusPoint?.(point);
-    }
+    // Always activate — no toggle, clicking a new step switches immediately
+    setActiveStepCode(step.myCode);
+    // Synthetic single-step route so RouteMap draws start → end line
+    onTraceRoute?.({
+      name: step.name,
+      myRouteUniqueCode: `__step__${step.myCode ?? step.name}`,
+      estimatedDuration: step.estimatedDuration,
+      estimatedDistance: step.estimatedDistance,
+      subRoutes: [step],
+    });
   };
 
   const handleTrace = () => {
     if (isTracing) {
+      // Stop full-route trace, clear step selection too
       onTraceRoute?.(null);
       setActiveStepCode(null);
-      onFocusPoint?.(null);
     } else {
+      // Clear any active step and trace the full route
       setActiveStepCode(null);
-      onFocusPoint?.(null);
       onTraceRoute?.(currentRoute);
     }
   };
@@ -72,11 +68,10 @@ export function RouteTimeline({
         <div className="flex flex-wrap gap-2 p-1 bg-sand/50 dark:bg-black/20 rounded-lg">
           {routes.map((r, i) => (
             <button
-              key={r.myRouteUniqueCode}
+              key={r.myRouteUniqueCode ?? i}
               onClick={() => {
                 setActiveRouteIndex(i);
                 setActiveStepCode(null);
-                onFocusPoint?.(null);
                 onTraceRoute?.(null);
               }}
               className={`flex-1 min-w-fit px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-300 ${
@@ -144,11 +139,11 @@ export function RouteTimeline({
             {/* Thread line */}
             <div className="absolute left-[7px] top-3 bottom-3 w-px bg-gradient-to-b from-ember via-border-warm dark:via-[#3a2e24] to-sage/60" />
 
-            {steps.map((step) => {
+            {steps.map((step, idx) => {
               const isActive = activeStepCode === step.myCode;
               return (
                 <motion.div
-                  key={step.myCode}
+                  key={step.myCode ?? idx}
                   whileHover={{ x: 2 }}
                   className={`relative cursor-pointer group rounded-lg px-3 py-2 -mx-3 transition-colors duration-200 ${
                     isActive
@@ -198,14 +193,25 @@ export function RouteTimeline({
             {/* End marker */}
             <div className="relative pt-1">
               <div className="absolute -left-[17px] md:-left-[19px] top-2 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#1e1912] bg-sage shadow-sm" />
-              <div className="flex items-center gap-2 px-3">
-                <h5 className="text-[13px] font-semibold text-sage">
-                  {steps[steps.length - 1].ending}
-                </h5>
-                <span className="bg-sage/15 text-sage text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full">
-                  Destination
-                </span>
-              </div>
+              {(() => {
+                const raw = steps[steps.length - 1].ending;
+                const parts = raw.split(",").map((s) => s.trim());
+                const primary = parts[0];
+                const secondary = parts.slice(1).join(", ");
+                return (
+                  <div className="px-3 flex flex-col gap-0.5" title={raw}>
+                    <span className="self-start bg-sage/15 text-sage text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full">
+                      Destination
+                    </span>
+                    <h5 className="text-[13px] font-semibold text-sage truncate">
+                      {primary}
+                    </h5>
+                    {secondary && (
+                      <p className="text-[10px] text-stone/55 truncate">{secondary}</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </motion.div>

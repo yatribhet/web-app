@@ -120,7 +120,7 @@ export default async function PlaceDetailPage({
                 <SidebarActions place={place} variant="mobileActions" />
                 <DescriptionBlock description={place.description} />
                 <PlaceInfoGrid place={place} />
-                
+
                 <SidebarActions place={place} variant="mobileDetails" />
 
                 {place.structuredData.amenities.length > 0 ? (
@@ -157,7 +157,7 @@ export default async function PlaceDetailPage({
                 <div className="mt-8">
                   <FAQSection faqs={place.aiMeta.faq} />
                 </div>
-                
+
                 <div className="mt-8">
                   <NearbyStrip currentPlace={place} allPlaces={places} />
                 </div>
