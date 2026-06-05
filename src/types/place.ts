@@ -14,9 +14,9 @@ export interface SubRoute {
   name: string;
   description: string;
   starting: string;
-  startLocation: GeoLocation;
+  startLocation?: GeoLocation; // optional — old records may be missing this field
   ending: string;
-  endLocation: GeoLocation;
+  endLocation?: GeoLocation;
   position: number;
   myCode: string;
   estimatedDuration: number; // minutes

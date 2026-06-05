@@ -1,5 +1,6 @@
 "use client";
 
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Route } from "../../types/place";
 import { Plus, Minus, LocateFixed } from "lucide-react";
@@ -15,21 +16,20 @@ export interface HospitalityMapPoint {
   lat: number;
   lng: number;
   label: string;
-  type: string; // hospitalityType — drives icon glyph + colour
+  type: string;
 }
 
 interface RouteMapProps {
   center: [number, number]; // [lat, lng] — the place's own coordinates
   focusPoint?: RouteMapPoint | null;
   traceRoute?: Route | null;
-  canvasClassName?: string; // override the inner map canvas classes
-  wrapperClassName?: string; // extra classes on the outermost wrapper div
-  hospitalityPoints?: HospitalityMapPoint[]; // "where to stay" markers
-  activeHospitalityId?: string | null; // highlighted + panned-to marker
-  onHospitalityClick?: (id: string) => void; // pin → select the card
+  canvasClassName?: string;
+  wrapperClassName?: string;
+  hospitalityPoints?: HospitalityMapPoint[];
+  activeHospitalityId?: string | null;
+  onHospitalityClick?: (id: string) => void;
 }
 
-/** Returns true only when every value is a valid, finite number */
 const fin = (...vals: unknown[]): boolean =>
   vals.every((v) => typeof v === "number" && Number.isFinite(v));
 
@@ -51,6 +51,130 @@ const PULSE_CSS = `
 }
 `;
 
+const ROUTE_SOURCE = "traced-route";
+const ROUTE_LAYER = "traced-route-line";
+
+// Returns a MapLibre inline raster style object.
+// Raster tiles have labels pre-rendered in the PNG — no glyph/font server
+// needed, so labels always appear regardless of environment.
+function getMapStyle(isDark: boolean): object {
+  const provider = process.env.NEXT_PUBLIC_MAP_PROVIDER ?? "stadia";
+  const stadiaKey = process.env.NEXT_PUBLIC_STADIA_API_KEY;
+
+  // Stadia Alidade Smooth — best quality, labels perfect, retina @2x
+  if (provider === "stadia" && stadiaKey && stadiaKey !== "CHANGE_ME") {
+    const variant = isDark ? "alidade_smooth_dark" : "alidade_smooth";
+    return {
+      version: 8,
+      sources: {
+        tiles: {
+          type: "raster",
+          tiles: [`https://tiles.stadiamaps.com/tiles/${variant}/{z}/{x}/{y}@2x.png?api_key=${stadiaKey}`],
+          tileSize: 512,
+          attribution: "© Stadia Maps © OpenMapTiles © OpenStreetMap contributors",
+        },
+      },
+      layers: [{ id: "raster-tiles", type: "raster", source: "tiles" }],
+    };
+  }
+
+  // Carto raster — free, no key, clean minimal design
+  if (provider === "carto") {
+    const variant = isDark ? "dark_all" : "light_all";
+    return {
+      version: 8,
+      sources: {
+        tiles: {
+          type: "raster",
+          tiles: [`https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`],
+          tileSize: 512,
+          attribution: "© CARTO © OpenStreetMap contributors",
+        },
+      },
+      layers: [{ id: "raster-tiles", type: "raster", source: "tiles" }],
+    };
+  }
+
+  // OSM — free, commercial use allowed with attribution, full labels
+  return {
+    version: 8,
+    sources: {
+      tiles: {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "© OpenStreetMap contributors",
+      },
+    },
+    layers: [{ id: "raster-tiles", type: "raster", source: "tiles" }],
+  };
+}
+
+// ── Marker element factories (no Leaflet — plain DOM elements) ───────────────
+
+function makePulseEl(): HTMLElement {
+  const el = document.createElement("div");
+  el.style.cssText = "position:relative;width:22px;height:22px";
+  el.innerHTML = `
+    <div style="position:absolute;inset:0;background:#ea7022;border-radius:50%;animation:mapPulse 2.2s ease-out infinite"></div>
+    <div style="position:absolute;top:4px;left:4px;width:14px;height:14px;background:#ea7022;border:3px solid white;border-radius:50%;box-shadow:0 2px 10px rgba(234,112,34,0.65)"></div>
+  `;
+  return el;
+}
+
+function makePillEl(color: string, text: string, animate = false): HTMLElement {
+  const el = document.createElement("div");
+  const label = text.length > 18 ? text.slice(0, 18) + "…" : text;
+  el.style.cssText = `background:${color};color:#fff;font:700 9px/1 sans-serif;padding:3px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25);border:2px solid rgba(255,255,255,0.9);letter-spacing:0.03em;${
+    animate ? "animation:pinDrop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;" : ""
+  }`;
+  el.textContent = label;
+  return el;
+}
+
+function makeRouteEndpointEl(color: string, text: string, isStart: boolean): HTMLElement {
+  const el = document.createElement("div");
+  el.style.cssText = "position:relative;width:28px;height:28px";
+  const label = text.length > 14 ? text.slice(0, 14) + "…" : text;
+  el.innerHTML = `
+    <div style="position:absolute;inset:0;background:${color};border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,0.3);border:3px solid white"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font:700 10px/1 sans-serif;color:white">${isStart ? "S" : "E"}</div>
+    <div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:${color};color:white;font:700 9px/1 sans-serif;padding:2px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.9)">${label}</div>
+  `;
+  return el;
+}
+
+function makeStepPinEl(color: string, text: string): HTMLElement {
+  const el = document.createElement("div");
+  el.style.cssText = "position:relative;width:24px;height:32px";
+  const label = text.length > 12 ? text.slice(0, 12) + "…" : text;
+  el.innerHTML = `
+    <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:20px;background:${color};border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.25);border:3px solid white"></div>
+    <div style="position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:8px solid ${color};filter:drop-shadow(0 1px 2px rgba(0,0,0,0.2))"></div>
+    <div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${color};color:white;font:700 9px/1 sans-serif;padding:3px 7px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.9);text-align:center">${label}</div>
+  `;
+  return el;
+}
+
+const FOOD_TYPES = new Set(["restaurant", "cafe"]);
+const BED_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>`;
+const FORK_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Z"/></svg>`;
+
+function makeHospitalityEl(type: string, active: boolean): HTMLElement {
+  const isFood = FOOD_TYPES.has(type);
+  const color = isFood ? "#4a7c59" : "#2d6ea8";
+  const size = active ? 30 : 24;
+  const ring = active
+    ? `box-shadow:0 0 0 4px ${color}40,0 3px 10px rgba(0,0,0,.35);`
+    : "box-shadow:0 2px 8px rgba(0,0,0,.3);";
+  const el = document.createElement("div");
+  el.style.cssText = `width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2.5px solid white;${ring}display:flex;align-items:center;justify-content:center;transition:all .2s ease;cursor:pointer;`;
+  el.innerHTML = isFood ? FORK_SVG : BED_SVG;
+  return el;
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 export function RouteMap({
   center,
   focusPoint,
@@ -63,229 +187,167 @@ export function RouteMap({
 }: RouteMapProps) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const LRef = useRef<any>(null);
-  const overlaysRef = useRef<any[]>([]);
-  const polyRef = useRef<any>(null);
-  const hospitalityLayerRef = useRef<Map<string, any>>(new Map());
+  const mlRef = useRef<any>(null); // maplibre-gl library reference
+  const overlayMarkersRef = useRef<any[]>([]);
+  const hospMarkersRef = useRef<Map<string, any>>(new Map());
   const prevActiveHospId = useRef<string | null>(null);
+  const scrollZoomActive = useRef(false);
   const [ready, setReady] = useState(false);
   const [warn, setWarn] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(false);
   const [isTracing, setIsTracing] = useState(false);
 
-  // Capture center once at mount so it never becomes a stale closure
   const mountCenter = useRef<[number, number]>(
     fin(center[0], center[1]) ? [center[0], center[1]] : [27.7172, 85.324]
   );
 
-  // ── Bootstrap map (runs exactly once) ─────────────────────────────────
+  // ── Bootstrap (runs exactly once) ─────────────────────────────────────────
   useEffect(() => {
     let dead = false;
 
-    import("leaflet").then((mod) => {
-      if (dead || !divRef.current) return;
-      if ((divRef.current as any)._leaflet_id) return; // already initialised
+    import("maplibre-gl").then((mod) => {
+      if (dead || !divRef.current || mapRef.current) return;
 
-      const L = (mod as any).default ?? mod;
-      LRef.current = L;
+      const ml = (mod as any).default ?? mod;
+      mlRef.current = ml;
 
-      // Fix Next.js webpack icon path issue
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      });
+      const isDark = document.documentElement.classList.contains("dark");
+      const [lat, lng] = mountCenter.current;
 
-      const c = mountCenter.current;
-      const map = L.map(divRef.current, {
-        center: c,
+      const map = new ml.Map({
+        container: divRef.current,
+        style: getMapStyle(isDark),
+        center: [lng, lat], // MapLibre uses [lng, lat] (GeoJSON order)
         zoom: 11,
-        scrollWheelZoom: false,
-        zoomControl: false,        // we render our own
+        scrollZoom: false,
         attributionControl: false,
-      });
-
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        { subdomains: "abcd", maxZoom: 19 }
-      ).addTo(map);
-
-      // Pulsing ember pin for the place
-      L.marker(c, {
-        icon: L.divIcon({
-          className: "",
-          html: `<div style="position:relative;width:22px;height:22px">
-            <div style="position:absolute;inset:0;background:#ea7022;border-radius:50%;animation:mapPulse 2.2s ease-out infinite"></div>
-            <div style="position:absolute;top:4px;left:4px;width:14px;height:14px;background:#ea7022;border:3px solid white;border-radius:50%;box-shadow:0 2px 10px rgba(234,112,34,0.65)"></div>
-          </div>`,
-          iconSize: [22, 22],
-          iconAnchor: [11, 11],
-        }),
-      }).addTo(map);
-
-      // Enable scroll zoom on user click
-      map.on("click", () => {
-        if (!map.scrollWheelZoom.enabled()) {
-          map.scrollWheelZoom.enable();
-          if (!dead) setScrollEnabled(true);
-        }
+        // Restrict viewport to Nepal — tiles outside this box are never fetched
+        maxBounds: [[79.5, 25.8], [88.8, 30.8]],
       });
 
       mapRef.current = map;
-      if (!dead) setReady(true);
+
+      map.on("load", () => {
+        if (dead) return;
+
+        // Pulsing ember marker for the place itself
+        const pulseEl = makePulseEl();
+        new ml.Marker({ element: pulseEl, anchor: "center" })
+          .setLngLat([lng, lat])
+          .addTo(map);
+
+        // Empty GeoJSON source + line layer for route tracing
+        map.addSource(ROUTE_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: ROUTE_LAYER,
+          type: "line",
+          source: ROUTE_SOURCE,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#ea7022",
+            "line-width": 3.5,
+            "line-opacity": 0.9,
+            "line-dasharray": [2, 1.4],
+          },
+        });
+
+        if (!dead) setReady(true);
+      });
+
+      map.on("click", () => {
+        if (!scrollZoomActive.current) {
+          map.scrollZoom.enable();
+          scrollZoomActive.current = true;
+          if (!dead) setScrollEnabled(true);
+        }
+      });
     });
 
     return () => {
       dead = true;
       mapRef.current?.remove();
       mapRef.current = null;
-      LRef.current = null;
-      overlaysRef.current = [];
-      polyRef.current = null;
-      hospitalityLayerRef.current.clear();
+      mlRef.current = null;
+      overlayMarkersRef.current = [];
+      hospMarkersRef.current.clear();
+      scrollZoomActive.current = false;
       setReady(false);
       setScrollEnabled(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Clear helper ───────────────────────────────────────────────────────
-  const clear = () => {
-    overlaysRef.current.forEach((o) => { try { o?.remove(); } catch (_) {} });
-    overlaysRef.current = [];
-    try { polyRef.current?.remove(); } catch (_) {}
-    polyRef.current = null;
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  const clearOverlays = () => {
+    overlayMarkersRef.current.forEach((m) => { try { m.remove(); } catch (_) {} });
+    overlayMarkersRef.current = [];
+    if (mapRef.current?.getSource(ROUTE_SOURCE)) {
+      mapRef.current.getSource(ROUTE_SOURCE).setData({ type: "FeatureCollection", features: [] });
+    }
   };
 
-  // ── Pill label icon ────────────────────────────────────────────────────
-  const pill = (L: any, color: string, text: string, animate = false) =>
-    L.divIcon({
-      className: animate ? "animate-drop" : "",
-      html: `<div style="background:${color};color:#fff;font:700 9px/1 sans-serif;padding:3px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25);border:2px solid rgba(255,255,255,0.9);letter-spacing:0.03em">${
-        text.length > 18 ? text.slice(0, 18) + "…" : text
-      }</div>${
-        animate ? `<style>.animate-drop{animation:pinDrop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;}</style>` : ""
-      }`,
-      iconAnchor: [0, 0],
-    });
-
-  // ── Route endpoint markers (start/end) ────────────────────────────────
-  const routeMarker = (L: any, color: string, text: string, isStart = false) =>
-    L.divIcon({
-      className: isStart ? "route-start-marker" : "route-end-marker",
-      html: `<div style="position:relative;width:28px;height:28px">
-        <div style="position:absolute;inset:0;background:${color};border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,0.3);border:3px solid white"></div>
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font:700 10px/1 sans-serif;color:white;white-space:nowrap">${
-          isStart ? "S" : "E"
-        }</div>
-        <div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:${color};color:white;font:700 9px/1 sans-serif;padding:2px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.9)">${text}</div>
-      </div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-    });
-
-  // ── Individual step pin marker ────────────────────────────────────────
-  const stepPin = (L: any, color: string, text: string) =>
-    L.divIcon({
-      className: "step-pin-marker",
-      html: `<div style="position:relative;width:24px;height:32px">
-        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:20px;height:20px;background:${color};border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.25);border:3px solid white"></div>
-        <div style="position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:8px solid ${color};filter:drop-shadow(0 1px 2px rgba(0,0,0,0.2))"></div>
-        <div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${color};color:white;font:700 9px/1 sans-serif;padding:3px 7px;border-radius:4px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.9);text-align:center">${text.length > 12 ? text.slice(0, 12) + "…" : text}</div>
-      </div>`,
-      iconSize: [24, 32],
-      iconAnchor: [12, 32],
-    });
-
-  // ── Hospitality marker (distinct circular badge, not a route teardrop) ─
-  const FOOD_TYPES = new Set(["restaurant", "cafe"]);
-  const BED_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>`;
-  const FORK_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Z"/></svg>`;
-
-  const hospitalityIcon = (L: any, type: string, active: boolean) => {
-    const isFood = FOOD_TYPES.has(type);
-    const color = isFood ? "#4a7c59" : "#2d6ea8";
-    const size = active ? 30 : 24;
-    const ring = active ? `box-shadow:0 0 0 4px ${color}40,0 3px 10px rgba(0,0,0,.35);` : "box-shadow:0 2px 8px rgba(0,0,0,.3);";
-    return L.divIcon({
-      className: "hospitality-marker",
-      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2.5px solid white;${ring}display:flex;align-items:center;justify-content:center;transition:all .2s ease">${
-        isFood ? FORK_SVG : BED_SVG
-      }</div>`,
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
-    });
-  };
-
-  // ── Fly to a point (no-op if coordinates are bad) ─────────────────────
-  const safeFly = (map: any, lat: unknown, lng: unknown, z: number) => {
+  const safeFly = (lat: unknown, lng: unknown, zoom: number) => {
     if (!fin(lat, lng)) {
       setWarn(`Coordinates unavailable (${lat}, ${lng})`);
       setTimeout(() => setWarn(null), 3000);
       return false;
     }
-    map.flyTo([lat, lng], z, { duration: 1.1, easeLinearity: 0.25 });
+    mapRef.current?.flyTo({ center: [lng as number, lat as number], zoom, duration: 1100 });
     return true;
   };
 
-  // ── Highlight ring (temporary) ────────────────────────────────────────
-  const addHighlightRing = (L: any, lat: number, lng: number) => {
-    const ring = L.circleMarker([lat, lng], {
-      radius: 18,
-      fill: false,
-      color: '#ea7022',
-      weight: 3,
-      opacity: 0.8,
-      className: 'highlight-ring',
-    }).addTo(mapRef.current);
-    requestAnimationFrame(() => {
-      const el = ring.getElement?.();
-      if (el) {
-        el.style.animation = 'ringExpand 1.2s ease-out forwards';
-        el.style.transformOrigin = 'center';
-      }
-    });
-    setTimeout(() => {
-      try { ring?.remove?.(); } catch (_) {}
-    }, 1200);
+  const addHighlightRing = (lat: number, lng: number) => {
+    const ml = mlRef.current;
+    const map = mapRef.current;
+    if (!ml || !map) return;
+    const el = document.createElement("div");
+    el.style.cssText =
+      "width:36px;height:36px;border-radius:50%;border:3px solid #ea7022;opacity:0.8;animation:ringExpand 1.2s ease-out forwards;pointer-events:none;";
+    const marker = new ml.Marker({ element: el, anchor: "center" })
+      .setLngLat([lng, lat])
+      .addTo(map);
+    setTimeout(() => { try { marker.remove(); } catch (_) {} }, 1200);
   };
 
-  // ── Effect: focus a single step ───────────────────────────────────────
+  // ── Effect: focus a single step ───────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    const L = LRef.current;
-    if (!ready || !map || !L) return;
+    const ml = mlRef.current;
+    if (!ready || !map || !ml) return;
 
-    clear();
+    clearOverlays();
     setWarn(null);
     setIsTracing(false);
 
-    if (!focusPoint) return; // no flyTo on deselect — just clear markers
+    if (!focusPoint) return;
 
     const { lat, lng, label } = focusPoint;
-    // Tighter zoom for focus points so the user can see the exact location
-    if (!safeFly(map, lat, lng, 15)) return;
+    if (!safeFly(lat, lng, 15)) return;
 
-    overlaysRef.current = [
-      // Add a visible pin marker for the selected step
-      L.marker([lat, lng], { icon: stepPin(L, "#ea7022", label) }).addTo(map),
-      // Keep the pill label as well for additional clarity
-      L.marker([lat, lng], { icon: pill(L, "#ea7022", label, true) }).addTo(map),
+    overlayMarkersRef.current = [
+      new ml.Marker({ element: makeStepPinEl("#ea7022", label), anchor: "bottom" })
+        .setLngLat([lng, lat])
+        .addTo(map),
+      new ml.Marker({ element: makePillEl("#ea7022", label, true), anchor: "bottom" })
+        .setLngLat([lng, lat])
+        .addTo(map),
     ];
 
-    // Add a temporary expanding ring to highlight the selected point
-    addHighlightRing(L, lat, lng);
+    addHighlightRing(lat, lng);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPoint, ready]);
 
-  // ── Effect: trace full route ──────────────────────────────────────────
+  // ── Effect: trace full route ──────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    const L = LRef.current;
-    if (!ready || !map || !L) return;
+    const ml = mlRef.current;
+    if (!ready || !map || !ml) return;
 
-    clear();
+    clearOverlays();
     setWarn(null);
 
     if (!traceRoute) {
@@ -295,10 +357,10 @@ export function RouteMap({
 
     setIsTracing(true);
 
-    const coords: [number, number][] = [];
-
-    let startPoint: [number, number] | null = null;
-    let endPoint: [number, number] | null = null;
+    // Coordinates in [lng, lat] order for GeoJSON / MapLibre
+    const geoCoords: [number, number][] = [];
+    let startLngLat: [number, number] | null = null;
+    let endLngLat: [number, number] | null = null;
     let startLabel = "Start";
     let endLabel = "Destination";
 
@@ -309,117 +371,100 @@ export function RouteMap({
       const eLat = sub.endLocation?.coordinates?.[1];
 
       if (fin(sLat, sLng)) {
-        coords.push([sLat as number, sLng as number]);
+        geoCoords.push([sLng as number, sLat as number]);
         if (idx === 0) {
-          startPoint = [sLat as number, sLng as number];
+          startLngLat = [sLng as number, sLat as number];
           startLabel = sub.starting || "Start";
         }
       }
 
-      if (fin(eLat, eLng)) {
-        if (idx === traceRoute.subRoutes.length - 1) {
-          endPoint = [eLat as number, eLng as number];
-          endLabel = sub.ending || "Destination";
-          coords.push([eLat as number, eLng as number]);
-        }
+      if (fin(eLat, eLng) && idx === traceRoute.subRoutes.length - 1) {
+        endLngLat = [eLng as number, eLat as number];
+        endLabel = sub.ending || "Destination";
+        geoCoords.push([eLng as number, eLat as number]);
       }
     });
 
-    // Add persistent start/end markers
-    if (startPoint) {
-      overlaysRef.current.push(
-        L.marker(startPoint, { icon: routeMarker(L, "#4a7c59", startLabel, true) }).addTo(map)
+    if (startLngLat) {
+      overlayMarkersRef.current.push(
+        new ml.Marker({ element: makeRouteEndpointEl("#4a7c59", startLabel, true), anchor: "center" })
+          .setLngLat(startLngLat)
+          .addTo(map)
       );
     }
-    if (endPoint) {
-      overlaysRef.current.push(
-        L.marker(endPoint, { icon: routeMarker(L, "#ea7022", endLabel, false) }).addTo(map)
+    if (endLngLat) {
+      overlayMarkersRef.current.push(
+        new ml.Marker({ element: makeRouteEndpointEl("#ea7022", endLabel, false), anchor: "center" })
+          .setLngLat(endLngLat)
+          .addTo(map)
       );
     }
 
-    if (coords.length === 0) {
+    if (geoCoords.length === 0) {
       setWarn("No valid coordinates found for this route.");
       setIsTracing(false);
       setTimeout(() => setWarn(null), 4000);
       return;
     }
 
-    polyRef.current = L.polyline(coords, {
-      color: "#ea7022", weight: 3.5, opacity: 0.9, dashArray: "10, 7",
-      lineCap: "round", lineJoin: "round",
-    }).addTo(map);
-
-    // ── Animated route-draw (SVG stroke-dashoffset trick) ────────────────
-    requestAnimationFrame(() => {
-      const el: SVGPathElement | null = polyRef.current?.getElement?.() ?? null;
-      if (el && typeof el.getTotalLength === "function") {
-        const len = el.getTotalLength();
-        el.style.strokeDasharray = `${len}`;
-        el.style.strokeDashoffset = `${len}`;
-        el.style.transition = "stroke-dashoffset 1.8s cubic-bezier(0.4,0,0.2,1)";
-        requestAnimationFrame(() => {
-          el.style.strokeDashoffset = "0";
-        });
-      }
+    map.getSource(ROUTE_SOURCE).setData({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: geoCoords },
     });
 
-    if (coords.length >= 2) {
-      map.fitBounds(coords, { padding: [32, 32], animate: true, duration: 1 });
+    if (geoCoords.length >= 2) {
+      const bounds = new ml.LngLatBounds();
+      geoCoords.forEach((c: [number, number]) => bounds.extend(c));
+      map.fitBounds(bounds, { padding: 32, duration: 1000, maxZoom: 14 });
     } else {
-      map.flyTo(coords[0], 12, { duration: 1 });
+      map.flyTo({ center: geoCoords[0], zoom: 12, duration: 1000 });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceRoute, ready]);
 
-  // ── Effect: hospitality markers (independent layer) ───────────────────
-  // Kept separate from clear()/overlaysRef so itinerary clicks (focus/trace)
-  // never tear these down. Rebuilds only when the point set or active id
-  // changes — not on every focus update.
+  // ── Effect: hospitality markers (independent layer) ───────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    const L = LRef.current;
-    if (!ready || !map || !L) return;
+    const ml = mlRef.current;
+    if (!ready || !map || !ml) return;
 
-    const layer = hospitalityLayerRef.current;
-    // Remove existing markers
+    const layer = hospMarkersRef.current;
     layer.forEach((m) => { try { m.remove(); } catch (_) {} });
     layer.clear();
 
     (hospitalityPoints ?? []).forEach((pt) => {
       if (!fin(pt.lat, pt.lng)) return;
       const active = pt.id === activeHospitalityId;
-      const marker = L.marker([pt.lat, pt.lng], {
-        icon: hospitalityIcon(L, pt.type, active),
-        zIndexOffset: active ? 1000 : 0,
-        title: pt.label,
-      }).addTo(map);
-      if (onHospitalityClick) marker.on("click", () => onHospitalityClick(pt.id));
+      const el = makeHospitalityEl(pt.type, active);
+      if (onHospitalityClick) el.addEventListener("click", () => onHospitalityClick(pt.id));
+      const marker = new ml.Marker({ element: el, anchor: "center" })
+        .setLngLat([pt.lng, pt.lat])
+        .addTo(map);
       layer.set(pt.id, marker);
     });
 
-    // Pan to the active marker only when it actually changes (gentle, no zoom)
     if (activeHospitalityId && activeHospitalityId !== prevActiveHospId.current) {
       const pt = (hospitalityPoints ?? []).find((p) => p.id === activeHospitalityId);
-      if (pt && fin(pt.lat, pt.lng)) map.panTo([pt.lat, pt.lng], { animate: true, duration: 0.6 });
+      if (pt && fin(pt.lat, pt.lng)) map.panTo([pt.lng, pt.lat], { duration: 600 });
     }
     prevActiveHospId.current = activeHospitalityId ?? null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hospitalityPoints, activeHospitalityId, ready]);
 
-  // ── Custom zoom handlers ───────────────────────────────────────────────
+  // ── Custom zoom handlers ──────────────────────────────────────────────────
   const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), []);
   const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), []);
   const handleReset = useCallback(() => {
-    mapRef.current?.flyTo(mountCenter.current, 11, { duration: 0.9, easeLinearity: 0.3 });
+    const [lat, lng] = mountCenter.current;
+    mapRef.current?.flyTo({ center: [lng, lat], zoom: 11, duration: 900 });
   }, []);
 
   return (
     <>
-      {/* Inject pulse keyframe once */}
       <style dangerouslySetInnerHTML={{ __html: PULSE_CSS }} />
 
       <div className={`relative group/map${wrapperClassName ? ` ${wrapperClassName}` : ""}`}>
-        {/* ── Map canvas ─────────────────────────────────────────── */}
+        {/* Map canvas */}
         <div
           ref={divRef}
           className={canvasClassName ?? "w-full h-52 md:h-64 rounded-xl overflow-hidden border border-border-warm dark:border-[#3a2e24] bg-sand dark:bg-[#13100d]"}
@@ -435,7 +480,7 @@ export function RouteMap({
           )}
         </div>
 
-        {/* ── Custom zoom controls (top-right) ───────────────────── */}
+        {/* Custom zoom controls */}
         {ready && (
           <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-1 opacity-0 group-hover/map:opacity-100 transition-opacity duration-200">
             <button
@@ -462,7 +507,7 @@ export function RouteMap({
           </div>
         )}
 
-        {/* ── Tracing badge ──────────────────────────────────────── */}
+        {/* Tracing badge */}
         {ready && isTracing && (
           <div className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/90 dark:bg-[#1e1912]/90 border border-ember/30 text-[10px] font-semibold text-ember px-2.5 py-1.5 rounded-full shadow-sm backdrop-blur-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-ember animate-pulse" />
@@ -470,7 +515,7 @@ export function RouteMap({
           </div>
         )}
 
-        {/* ── Scroll-to-zoom hint ─────────────────────────────────── */}
+        {/* Scroll hint */}
         {ready && !scrollEnabled && (
           <div className="absolute bottom-3 left-3 z-[1000] pointer-events-none">
             <div className="bg-black/50 text-white/90 text-[10px] px-2.5 py-1 rounded-full backdrop-blur-sm tracking-wide select-none">
@@ -479,7 +524,7 @@ export function RouteMap({
           </div>
         )}
 
-        {/* ── Coordinate warning toast ────────────────────────────── */}
+        {/* Coordinate warning */}
         {warn && (
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm pointer-events-none">
             ⚠️ {warn}

@@ -37,19 +37,18 @@ export function RouteTimeline({
   };
 
   const handleStepClick = (step: SubRoute) => {
-    const lat = step.startLocation.coordinates[1];
-    const lng = step.startLocation.coordinates[0];
-    const point: RouteMapPoint = { lat, lng, label: step.name };
-
     if (activeStepCode === step.myCode) {
-      // Toggle off
       setActiveStepCode(null);
       onFocusPoint?.(null);
-    } else {
-      // Cancel trace if active
-      if (isTracing) onTraceRoute?.(null);
-      setActiveStepCode(step.myCode);
-      onFocusPoint?.(point);
+      return;
+    }
+
+    if (isTracing) onTraceRoute?.(null);
+    setActiveStepCode(step.myCode);
+
+    const coords = step.startLocation?.coordinates;
+    if (coords) {
+      onFocusPoint?.({ lat: coords[1], lng: coords[0], label: step.name });
     }
   };
 
@@ -72,7 +71,7 @@ export function RouteTimeline({
         <div className="flex flex-wrap gap-2 p-1 bg-sand/50 dark:bg-black/20 rounded-lg">
           {routes.map((r, i) => (
             <button
-              key={r.myRouteUniqueCode}
+              key={r.myRouteUniqueCode ?? i}
               onClick={() => {
                 setActiveRouteIndex(i);
                 setActiveStepCode(null);
@@ -144,11 +143,11 @@ export function RouteTimeline({
             {/* Thread line */}
             <div className="absolute left-[7px] top-3 bottom-3 w-px bg-gradient-to-b from-ember via-border-warm dark:via-[#3a2e24] to-sage/60" />
 
-            {steps.map((step) => {
+            {steps.map((step, idx) => {
               const isActive = activeStepCode === step.myCode;
               return (
                 <motion.div
-                  key={step.myCode}
+                  key={step.myCode ?? idx}
                   whileHover={{ x: 2 }}
                   className={`relative cursor-pointer group rounded-lg px-3 py-2 -mx-3 transition-colors duration-200 ${
                     isActive
