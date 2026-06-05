@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Playfair_Display, DM_Sans } from "next/font/google";
 import "./globals.css";
-import "leaflet/dist/leaflet.css";
 import { ThemeProvider } from "@/src/components/layout/ThemeProvider";
 import { ScrollbarProvider } from "@/src/components/layout/ScrollbarProvider";
+import NextTopLoader from "nextjs-toploader";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -65,6 +65,12 @@ export default function RootLayout({
         </a>
         <ThemeProvider>
           <ScrollbarProvider>{children}</ScrollbarProvider>
+          <NextTopLoader
+            color="#ea7022"
+            height={3}
+            showSpinner={false}
+            shadow="0 0 10px #ea7022,0 0 5px #ea7022"
+          />
         </ThemeProvider>
       </body>
     </html>

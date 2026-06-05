@@ -205,7 +205,7 @@ export function PlaceHero({ place }: PlaceHeroProps) {
             {side2 && (
               <button
                 onClick={() => openLightbox(2)}
-                className="relative rounded-xl overflow-hidden bg-[#13100d] group h-20 sm:h-28 md:h-36 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+                className="hidden md:block relative rounded-xl overflow-hidden bg-[#13100d] group h-20 sm:h-28 md:h-36 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
               >
                 <img
                   src={side2}
