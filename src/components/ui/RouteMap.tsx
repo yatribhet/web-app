@@ -54,6 +54,30 @@ const PULSE_CSS = `
 const ROUTE_SOURCE = "traced-route";
 const ROUTE_LAYER = "traced-route-line";
 
+// Fetches the actual road geometry from self-hosted OSRM.
+// waypoints are [lng, lat] pairs (GeoJSON order).
+// Returns [lng, lat] pairs on success, null on any failure.
+async function fetchOSRMRoute(
+  waypoints: [number, number][],
+  signal: AbortSignal
+): Promise<[number, number][] | null> {
+  const base = process.env.NEXT_PUBLIC_OSRM_URL;
+  if (!base || waypoints.length < 2) return null;
+  const coords = waypoints.map(([lng, lat]) => `${lng},${lat}`).join(";");
+  try {
+    const res = await fetch(
+      `${base}/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+      { signal }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.code !== "Ok") return null;
+    return (json.routes?.[0]?.geometry?.coordinates as [number, number][]) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Returns a MapLibre inline raster style object.
 // Raster tiles have labels pre-rendered in the PNG — no glyph/font server
 // needed, so labels always appear regardless of environment.
@@ -220,7 +244,7 @@ export function RouteMap({
         center: [lng, lat], // MapLibre uses [lng, lat] (GeoJSON order)
         zoom: 11,
         scrollZoom: false,
-        attributionControl: false,
+        attributionControl: true,
         // Restrict viewport to Nepal — tiles outside this box are never fetched
         maxBounds: [[79.5, 25.8], [88.8, 30.8]],
       });
@@ -407,18 +431,34 @@ export function RouteMap({
       return;
     }
 
-    map.getSource(ROUTE_SOURCE).setData({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: geoCoords },
-    });
+    const drawLine = (coords: [number, number][]) => {
+      if (!mapRef.current) return;
+      mapRef.current.getSource(ROUTE_SOURCE).setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+      });
+      if (coords.length >= 2) {
+        const bounds = new ml.LngLatBounds();
+        coords.forEach((c: [number, number]) => bounds.extend(c));
+        mapRef.current.fitBounds(bounds, { padding: 32, duration: 1000, maxZoom: 14 });
+      } else {
+        mapRef.current.flyTo({ center: coords[0], zoom: 12, duration: 1000 });
+      }
+    };
 
-    if (geoCoords.length >= 2) {
-      const bounds = new ml.LngLatBounds();
-      geoCoords.forEach((c: [number, number]) => bounds.extend(c));
-      map.fitBounds(bounds, { padding: 32, duration: 1000, maxZoom: 14 });
-    } else {
-      map.flyTo({ center: geoCoords[0], zoom: 12, duration: 1000 });
+    const routingProvider = process.env.NEXT_PUBLIC_ROUTING_PROVIDER ?? "straight";
+
+    if (routingProvider === "osrm") {
+      const controller = new AbortController();
+      fetchOSRMRoute(geoCoords, controller.signal).then((roadCoords) => {
+        // Fall back to straight line if OSRM fails or returns nothing
+        drawLine(roadCoords ?? geoCoords);
+      });
+      return () => controller.abort();
     }
+
+    // straight — draw immediately, no external request
+    drawLine(geoCoords);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceRoute, ready]);
 

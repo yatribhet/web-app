@@ -37,29 +37,26 @@ export function RouteTimeline({
   };
 
   const handleStepClick = (step: SubRoute) => {
-    if (activeStepCode === step.myCode) {
-      setActiveStepCode(null);
-      onFocusPoint?.(null);
-      return;
-    }
-
-    if (isTracing) onTraceRoute?.(null);
+    // Always activate — no toggle, clicking a new step switches immediately
     setActiveStepCode(step.myCode);
-
-    const coords = step.startLocation?.coordinates;
-    if (coords) {
-      onFocusPoint?.({ lat: coords[1], lng: coords[0], label: step.name });
-    }
+    // Synthetic single-step route so RouteMap draws start → end line
+    onTraceRoute?.({
+      name: step.name,
+      myRouteUniqueCode: `__step__${step.myCode ?? step.name}`,
+      estimatedDuration: step.estimatedDuration,
+      estimatedDistance: step.estimatedDistance,
+      subRoutes: [step],
+    });
   };
 
   const handleTrace = () => {
     if (isTracing) {
+      // Stop full-route trace, clear step selection too
       onTraceRoute?.(null);
       setActiveStepCode(null);
-      onFocusPoint?.(null);
     } else {
+      // Clear any active step and trace the full route
       setActiveStepCode(null);
-      onFocusPoint?.(null);
       onTraceRoute?.(currentRoute);
     }
   };
@@ -75,7 +72,6 @@ export function RouteTimeline({
               onClick={() => {
                 setActiveRouteIndex(i);
                 setActiveStepCode(null);
-                onFocusPoint?.(null);
                 onTraceRoute?.(null);
               }}
               className={`flex-1 min-w-fit px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-300 ${
